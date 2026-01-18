@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Viewer</title>
+
+<style>
+body {
+  font-family: Arial;
+  background: #111;
+  color: #eee;
+  text-align: center;
+  padding: 15px;
+}
+input {
+  font-size: 16px;
+  padding: 6px;
+  margin: 5px;
+}
+#card {
+  margin-top: 20px;
+  padding: 15px;
+  border: 1px solid #444;
+  border-radius: 10px;
+  display: none;
+}
+</style>
+</head>
+
+<body>
+
+<h2>👀 GPS Viewer</h2>
+
+Pair Code:<br>
+<input id="pairId" value="AB1234"><br>
+
+<div id="status">Waiting for data…</div>
+
+<div id="card">
+  <div>Latitude: <span id="lat"></span></div>
+  <div>Longitude: <span id="lon"></span></div>
+  <div>Accuracy: <span id="acc"></span></div>
+  <div>Distance: <span id="dist"></span></div>
+  <div>Last Update: <span id="time"></span></div>
+</div>
+
+<script>
+const WS_URL = "wss://ws-relay-zqzk.onrender.com";
+const ws = new WebSocket(WS_URL);
+
+// viewer's own location
+let myLat = null;
+let myLon = null;
+
+// get viewer GPS once
+navigator.geolocation.getCurrentPosition(pos => {
+  myLat = pos.coords.latitude;
+  myLon = pos.coords.longitude;
+});
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = x => x * Math.PI / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat/2) ** 2 +
+    Math.cos(toRad(lat1)) *
+    Math.cos(toRad(lat2)) *
+    Math.sin(dLon/2) ** 2;
+
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+ws.onmessage = (e) => {
+  const data = JSON.parse(e.data);
+  const pair = document.getElementById("pairId").value.trim();
+
+  if (data.type !== "location") return;
+  if (data.pairId !== pair) return;
+
+  document.getElementById("card").style.display = "block";
+  document.getElementById("status").innerText = "Location received";
+
+  document.getElementById("lat").innerText = data.lat.toFixed(6);
+  document.getElementById("lon").innerText = data.lon.toFixed(6);
+
+  document.getElementById("acc").innerText =
+    data.accuracy.toFixed(1) + " m";
+
+  if (myLat !== null) {
+    const d = haversine(myLat, myLon, data.lat, data.lon);
+    document.getElementById("dist").innerText =
+      d < 1000 ? d.toFixed(1) + " m" : (d/1000).toFixed(2) + " km";
+  } else {
+    document.getElementById("dist").innerText = "Calculating…";
+  }
+
+  document.getElementById("time").innerText =
+    new Date(data.timestamp).toLocaleTimeString();
+};
+</script>
+
+</body>
+</html>
