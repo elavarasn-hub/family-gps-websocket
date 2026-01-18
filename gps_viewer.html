@@ -2,14 +2,13 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GPS Viewer</title>
 
 <link
   rel="stylesheet"
   href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
 />
-
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
@@ -18,17 +17,13 @@ body {
   background:#111;
   color:#eee;
   font-family:Arial;
-  text-align:center;
 }
 #top {
   padding:10px;
+  text-align:center;
 }
 #map {
   height:80vh;
-}
-input {
-  font-size:16px;
-  padding:6px;
 }
 </style>
 </head>
@@ -38,8 +33,8 @@ input {
 <div id="top">
   <h2>👀 GPS Viewer</h2>
   Pair Code:
-  <input id="code" value="AB1234">
-  <div id="status">Waiting for data...</div>
+  <input id="pair" value="AB1234">
+  <p id="last">Waiting for data…</p>
 </div>
 
 <div id="map"></div>
@@ -47,29 +42,38 @@ input {
 <script>
 const ws = new WebSocket("wss://ws-relay-zqzk.onrender.com");
 
-const map = L.map('map').setView([20, 78], 5);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '© OpenStreetMap'
+const map = L.map("map").setView([11.0,78.0], 13);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom:19
 }).addTo(map);
 
 let marker = null;
 
 ws.onmessage = e => {
   const data = JSON.parse(e.data);
-  const pair = document.getElementById("code").value.trim();
+  const pair = document.getElementById("pair").value.trim();
 
-  if (data.type !== "gps") return;
   if (data.pair !== pair) return;
 
-  document.getElementById("status").innerText =
-    "Last update: " + new Date(data.ts).toLocaleTimeString();
+  // GPS update
+  if (data.type === "gps") {
+    const lat = data.lat;
+    const lon = data.lon;
 
-  if (!marker) {
-    marker = L.marker([data.lat, data.lon]).addTo(map);
-    map.setView([data.lat, data.lon], 16);
-  } else {
-    marker.setLatLng([data.lat, data.lon]);
+    if (!marker) {
+      marker = L.marker([lat, lon]).addTo(map);
+    } else {
+      marker.setLatLng([lat, lon]);
+    }
+
+    map.setView([lat, lon], 16);
+    document.getElementById("last").innerText =
+      "Last update: " + new Date(data.ts).toLocaleTimeString();
+  }
+
+  // SOS popup
+  if (data.type === "sos") {
+    alert("🚨 SOS ALERT RECEIVED!\nImmediate attention required.");
   }
 };
 </script>
