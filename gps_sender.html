@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Sender</title>
+
+<style>
+body {
+  font-family: Arial;
+  background: #111;
+  color: #eee;
+  text-align: center;
+  padding: 15px;
+}
+input, button {
+  font-size: 16px;
+  padding: 8px;
+  margin: 6px;
+}
+#status { margin-top: 10px; }
+</style>
+</head>
+
+<body>
+
+<h2>📍 GPS Sender</h2>
+
+Pair Code:<br>
+<input id="pairId" value="AB1234"><br>
+
+<button onclick="startSharing()">Start Sharing</button>
+<button onclick="stopSharing()">Stop</button>
+
+<div id="status">Idle</div>
+
+<script>
+const WS_URL = "wss://ws-relay-zqzk.onrender.com";
+let ws = new WebSocket(WS_URL);
+let watchId = null;
+
+ws.onopen = () => {
+  document.getElementById("status").innerText = "WebSocket connected";
+};
+
+function startSharing() {
+  const pairId = document.getElementById("pairId").value.trim();
+  if (!pairId) {
+    alert("Enter Pair Code");
+    return;
+  }
+
+  if (!navigator.geolocation) {
+    alert("GPS not supported");
+    return;
+  }
+
+  document.getElementById("status").innerText = "Sharing location…";
+
+  watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      const msg = {
+        type: "location",
+        pairId: pairId,
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        timestamp: Date.now()
+      };
+
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(msg));
+      }
+    },
+    (err) => {
+      alert("GPS error: " + err.message);
+    },
+    {
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: 10000
+    }
+  );
+}
+
+function stopSharing() {
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+    document.getElementById("status").innerText = "Stopped";
+  }
+}
+</script>
+
+</body>
+</html>
