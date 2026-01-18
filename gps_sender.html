@@ -6,35 +6,16 @@
 <title>GPS Sender</title>
 
 <style>
-body {
-  background:#111;
-  color:#eee;
-  font-family:Arial;
-  text-align:center;
-  padding:15px;
-}
-input, button {
-  font-size:16px;
-  padding:8px;
-  margin:6px;
-}
-#pair {
-  font-weight:bold;
-  letter-spacing:2px;
-}
-#sos {
-  position:fixed;
-  bottom:20px;
-  left:50%;
-  transform:translateX(-50%);
-  background:red;
-  color:white;
-  font-size:20px;
-  font-weight:bold;
-  border:none;
-  border-radius:50px;
-  padding:14px 28px;
-}
+body{background:#111;color:#eee;font-family:Arial;padding:10px}
+h2{text-align:center}
+#pair{font-weight:bold;letter-spacing:2px}
+#chat{height:160px;overflow-y:auto;border:1px solid #333;padding:5px}
+.msg{margin:4px 0}
+.me{color:#0f0}
+.them{color:#6cf}
+input,button{padding:8px;margin:4px;font-size:15px}
+#sos{position:fixed;bottom:15px;left:50%;transform:translateX(-50%);
+background:red;color:#fff;font-size:20px;border-radius:40px;padding:12px 30px;border:none}
 </style>
 </head>
 
@@ -42,70 +23,89 @@ input, button {
 
 <h2>📍 GPS Sender</h2>
 
-<div>
-  Pair Code:
-  <input id="pair" readonly>
-</div>
+Pair Code: <input id="pair" readonly><br>
 
-<button onclick="startSharing()">Start Sharing</button>
-<button onclick="stopSharing()">Stop</button>
+<button onclick="startGPS()">Start GPS</button>
+<button onclick="stopGPS()">Stop GPS</button>
+<button onclick="recordVoice()">🎙️ Send Voice (10s)</button>
 
 <p id="status">Idle</p>
+
+<h3>💬 Chat</h3>
+<div id="chat"></div>
+<input id="msg" placeholder="Type message">
+<button onclick="sendText()">Send</button>
 
 <button id="sos" onclick="sendSOS()">🚨 SOS</button>
 
 <script>
 const ws = new WebSocket("wss://ws-relay-zqzk.onrender.com");
-let watchId = null;
+let watchId=null;
+let mediaRecorder,chunks=[];
 
-// generate secure-ish pair code
-function generatePair() {
-  return Math.random().toString(36).substring(2,8).toUpperCase();
+// Pair code
+const pairCode=Math.random().toString(36).substring(2,8).toUpperCase();
+pair.value=pairCode;
+
+ws.onopen=()=>log("System","Connected");
+
+function send(data){ws.send(JSON.stringify(data));}
+
+function log(from,text){
+  chat.innerHTML+=`<div class="msg ${from==='Me'?'me':'them'}"><b>${from}:</b> ${text}</div>`;
+  chat.scrollTop=chat.scrollHeight;
 }
-const pairCode = generatePair();
-document.getElementById("pair").value = pairCode;
-
-ws.onopen = () => console.log("WebSocket connected");
 
 // GPS
-function startSharing() {
-  if (!navigator.geolocation) {
-    alert("GPS not supported");
-    return;
-  }
-
-  watchId = navigator.geolocation.watchPosition(
-    pos => {
-      ws.send(JSON.stringify({
-        type: "gps",
-        pair: pairCode,
-        lat: pos.coords.latitude,
-        lon: pos.coords.longitude,
-        acc: pos.coords.accuracy,
-        ts: Date.now()
-      }));
-      document.getElementById("status").innerText = "Sharing location…";
-    },
-    err => alert("GPS error"),
-    { enableHighAccuracy:true, maximumAge:0 }
-  );
+function startGPS(){
+  watchId=navigator.geolocation.watchPosition(p=>{
+    send({type:"gps",pair:pairCode,lat:p.coords.latitude,lon:p.coords.longitude,ts:Date.now()});
+    status.innerText="Sharing GPS";
+  },()=>alert("GPS error"),{enableHighAccuracy:true});
+}
+function stopGPS(){
+  if(watchId) navigator.geolocation.clearWatch(watchId);
+  status.innerText="Stopped";
 }
 
-function stopSharing() {
-  if (watchId) navigator.geolocation.clearWatch(watchId);
-  document.getElementById("status").innerText = "Stopped";
+// Chat
+function sendText(){
+  if(!msg.value)return;
+  send({type:"text",from:"sender",pair:pairCode,text:msg.value,ts:Date.now()});
+  log("Me",msg.value);
+  msg.value="";
 }
 
 // SOS
-function sendSOS() {
-  ws.send(JSON.stringify({
-    type: "sos",
-    pair: pairCode,
-    ts: Date.now()
-  }));
-  alert("🚨 SOS sent!");
+function sendSOS(){
+  send({type:"sos",pair:pairCode,ts:Date.now()});
+  alert("🚨 SOS Sent");
 }
-</script>
 
+// Voice (10 sec)
+async function recordVoice(){
+  const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+  mediaRecorder=new MediaRecorder(stream);
+  chunks=[];
+  mediaRecorder.ondataavailable=e=>chunks.push(e.data);
+  mediaRecorder.onstop=()=>{
+    const blob=new Blob(chunks,{type:"audio/webm"});
+    const r=new FileReader();
+    r.onloadend=()=>send({type:"audio",pair:pairCode,audio:r.result,ts:Date.now()});
+    r.readAsDataURL(blob);
+  };
+  mediaRecorder.start();
+  setTimeout(()=>mediaRecorder.stop(),10000);
+}
+
+// Receive
+ws.onmessage=e=>{
+  const d=JSON.parse(e.data);
+  if(d.pair!==pairCode)return;
+
+  if(d.type==="ack") log("Viewer","SOS acknowledged");
+  if(d.type==="text" && d.from==="viewer") log("Viewer",d.text);
+};
+</script>
 </body>
 </html>
