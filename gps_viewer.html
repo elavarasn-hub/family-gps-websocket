@@ -5,78 +5,79 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GPS Viewer</title>
 
-<link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
-body {
-  margin:0;
-  background:#111;
-  color:#eee;
-  font-family:Arial;
-}
-#top {
-  padding:10px;
-  text-align:center;
-}
-#map {
-  height:80vh;
-}
+body{margin:0;background:#111;color:#eee;font-family:Arial}
+#top{padding:8px;text-align:center}
+#map{height:55vh}
+#chat{height:160px;overflow-y:auto;border-top:1px solid #333;padding:5px}
+.msg{margin:4px}
+.me{color:#6cf}
+.them{color:#0f0}
+input,button{padding:6px;font-size:14px}
 </style>
 </head>
 
 <body>
 
 <div id="top">
-  <h2>👀 GPS Viewer</h2>
-  Pair Code:
-  <input id="pair" value="AB1234">
-  <p id="last">Waiting for data…</p>
+<h3>👀 Viewer</h3>
+Pair Code: <input id="pair">
+<p id="info">Waiting…</p>
 </div>
 
 <div id="map"></div>
 
+<h3 style="padding-left:6px">💬 Chat</h3>
+<div id="chat"></div>
+<input id="msg" placeholder="Reply">
+<button onclick="sendText()">Send</button>
+
 <script>
-const ws = new WebSocket("wss://ws-relay-zqzk.onrender.com");
+const ws=new WebSocket("wss://ws-relay-zqzk.onrender.com");
+let map=L.map("map").setView([11,78],13);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+let marker=null;
 
-const map = L.map("map").setView([11.0,78.0], 13);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom:19
-}).addTo(map);
+function log(from,text){
+  chat.innerHTML+=`<div class="msg ${from==='Me'?'me':'them'}"><b>${from}:</b> ${text}</div>`;
+  chat.scrollTop=chat.scrollHeight;
+}
 
-let marker = null;
+function sendText(){
+  if(!msg.value)return;
+  ws.send(JSON.stringify({type:"text",from:"viewer",pair:pair.value,text:msg.value,ts:Date.now()}));
+  log("Me",msg.value);
+  msg.value="";
+}
 
-ws.onmessage = e => {
-  const data = JSON.parse(e.data);
-  const pair = document.getElementById("pair").value.trim();
+ws.onmessage=e=>{
+  const d=JSON.parse(e.data);
+  if(d.pair!==pair.value)return;
 
-  if (data.pair !== pair) return;
-
-  // GPS update
-  if (data.type === "gps") {
-    const lat = data.lat;
-    const lon = data.lon;
-
-    if (!marker) {
-      marker = L.marker([lat, lon]).addTo(map);
-    } else {
-      marker.setLatLng([lat, lon]);
-    }
-
-    map.setView([lat, lon], 16);
-    document.getElementById("last").innerText =
-      "Last update: " + new Date(data.ts).toLocaleTimeString();
+  if(d.type==="gps"){
+    if(!marker){marker=L.marker([d.lat,d.lon]).addTo(map);}
+    else marker.setLatLng([d.lat,d.lon]);
+    map.setView([d.lat,d.lon],16);
+    info.innerText="Last update: "+new Date(d.ts).toLocaleTimeString();
   }
 
-  // SOS popup
-  if (data.type === "sos") {
-    alert("🚨 SOS ALERT RECEIVED!\nImmediate attention required.");
+  if(d.type==="sos"){
+    alert("🚨 SOS RECEIVED!");
+    ws.send(JSON.stringify({type:"ack",pair:pair.value,ts:Date.now()}));
+  }
+
+  if(d.type==="text" && d.from==="sender"){
+    log("Sender",d.text);
+  }
+
+  if(d.type==="audio"){
+    const a=new Audio(d.audio);
+    a.play();
   }
 };
 </script>
-
 </body>
 </html>
