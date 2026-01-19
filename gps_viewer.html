@@ -10,13 +10,14 @@
 
 <style>
 body{margin:0;background:#111;color:#eee;font-family:Arial}
-#top{padding:8px;text-align:center}
-#map{height:55vh}
-#chat{height:160px;overflow-y:auto;border-top:1px solid #333;padding:5px}
-.msg{margin:4px}
+#top{text-align:center;padding:8px}
+#map{height:50vh}
+#chat{height:140px;overflow:auto;border-top:1px solid #333;padding:5px}
 .me{color:#6cf}
 .them{color:#0f0}
-input,button{padding:6px;font-size:14px}
+#result{font-size:18px;font-weight:bold}
+.success{color:#0f0}
+.fail{color:#f00}
 </style>
 </head>
 
@@ -24,8 +25,11 @@ input,button{padding:6px;font-size:14px}
 
 <div id="top">
 <h3>👀 Viewer</h3>
-Pair Code: <input id="pair">
-<p id="info">Waiting…</p>
+Pair Code:
+<input id="pair">
+<button onclick="checkPair()">Check</button>
+<div id="result"></div>
+<p id="info">Not paired</p>
 </div>
 
 <div id="map"></div>
@@ -37,28 +41,49 @@ Pair Code: <input id="pair">
 
 <script>
 const ws=new WebSocket("wss://ws-relay-zqzk.onrender.com");
-let map=L.map("map").setView([11,78],13);
+let paired=false;
+
+let map=L.map("map").setView([11,78],5);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 let marker=null;
 
-function log(from,text){
-  chat.innerHTML+=`<div class="msg ${from==='Me'?'me':'them'}"><b>${from}:</b> ${text}</div>`;
+function log(cls,text){
+  chat.innerHTML+=`<div class="${cls}">${text}</div>`;
   chat.scrollTop=chat.scrollHeight;
 }
 
+function checkPair(){
+  ws.send({toString(){return JSON.stringify({type:"pair_check",pair:pair.value.trim().toUpperCase()})}});
+  result.innerText="Checking…";
+}
+
 function sendText(){
-  if(!msg.value)return;
+  if(!paired||!msg.value)return;
   ws.send(JSON.stringify({type:"text",from:"viewer",pair:pair.value,text:msg.value,ts:Date.now()}));
-  log("Me",msg.value);
+  log("me","Me: "+msg.value);
   msg.value="";
 }
 
 ws.onmessage=e=>{
   const d=JSON.parse(e.data);
-  if(d.pair!==pair.value)return;
+
+  if(d.type==="pair_result" && d.pair===pair.value.trim().toUpperCase()){
+    if(d.status==="success"){
+      paired=true;
+      result.innerText="✅ CODE SUCCESS";
+      result.className="success";
+      info.innerText="Connected";
+    }else{
+      paired=false;
+      result.innerText="❌ CODE FAILED";
+      result.className="fail";
+    }
+  }
+
+  if(!paired || d.pair!==pair.value.trim()) return;
 
   if(d.type==="gps"){
-    if(!marker){marker=L.marker([d.lat,d.lon]).addTo(map);}
+    if(!marker) marker=L.marker([d.lat,d.lon]).addTo(map);
     else marker.setLatLng([d.lat,d.lon]);
     map.setView([d.lat,d.lon],16);
     info.innerText="Last update: "+new Date(d.ts).toLocaleTimeString();
@@ -69,14 +94,8 @@ ws.onmessage=e=>{
     ws.send(JSON.stringify({type:"ack",pair:pair.value,ts:Date.now()}));
   }
 
-  if(d.type==="text" && d.from==="sender"){
-    log("Sender",d.text);
-  }
-
-  if(d.type==="audio"){
-    const a=new Audio(d.audio);
-    a.play();
-  }
+  if(d.type==="text" && d.from==="sender") log("them","Sender: "+d.text);
+  if(d.type==="audio"){ new Audio(d.audio).play(); }
 };
 </script>
 </body>
