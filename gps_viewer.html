@@ -3,53 +3,77 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Viewer</title>
+<title>Location Viewer</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
-body{margin:0;background:#111;color:#eee;font-family:Arial}
-#top{text-align:center;padding:10px}
-#map{height:85vh}
+body{
+  margin:0;
+  background:#111;
+  color:#eee;
+  font-family:Arial;
+}
+#top{
+  padding:10px;
+  text-align:center;
+}
+#map{
+  height:85vh;
+}
 </style>
 </head>
 
 <body>
 
 <div id="top">
-<h3>🗺️ VIEWER</h3>
+<h3>🗺️ LOCATION VIEWER</h3>
 Pair Code:
 <input id="pair" placeholder="Enter pair code">
-<p id="info">Waiting…</p>
+<p id="info">Waiting for location…</p>
 </div>
 
 <div id="map"></div>
 
 <script>
-const ws=new WebSocket("wss://ws-relay-zqzk.onrender.com");
+const ws = new WebSocket("wss://ws-relay-zqzk.onrender.com");
 
-let map=L.map("map").setView([20,78],5);
+let map = L.map("map").setView([20,78], 5);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
-  maxZoom:19
+  maxZoom:19,
+  attribution:"© OpenStreetMap"
 }).addTo(map);
 
-let marker=null;
+let marker = null;
+let circle = null;
 
-ws.onmessage=e=>{
-  const d=JSON.parse(e.data);
-  const pair=document.getElementById("pair").value.trim();
-  if(!pair || d.pair!==pair) return;
+ws.onmessage = e => {
+  const d = JSON.parse(e.data);
+  const pair = document.getElementById("pair").value.trim();
+  if(!pair || d.pair !== pair) return;
+
+  const lat = d.lat;
+  const lon = d.lon;
+  const acc = d.acc;
 
   if(!marker){
-    marker=L.marker([d.lat,d.lon]).addTo(map);
+    marker = L.marker([lat, lon]).addTo(map);
+    circle = L.circle([lat, lon], {
+      radius: acc,
+      color: "red",
+      fillOpacity: 0.2
+    }).addTo(map);
   }else{
-    marker.setLatLng([d.lat,d.lon]);
+    marker.setLatLng([lat, lon]);
+    circle.setLatLng([lat, lon]);
+    circle.setRadius(acc);
   }
 
-  map.setView([d.lat,d.lon],10);
-  document.getElementById("info").innerText=
-    (d.city||"")+" "+(d.region||"")+" | "+
+  map.setView([lat, lon], acc < 300 ? 16 : 13);
+
+  document.getElementById("info").innerText =
+    "Accuracy ≈ " + acc + " m | " +
     new Date(d.ts).toLocaleTimeString();
 };
 </script>
