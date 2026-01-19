@@ -3,100 +3,56 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GPS Viewer</title>
+<title>Viewer</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
 body{margin:0;background:#111;color:#eee;font-family:Arial}
-#top{text-align:center;padding:8px}
-#map{height:50vh}
-#chat{height:140px;overflow:auto;border-top:1px solid #333;padding:5px}
-.me{color:#6cf}
-.them{color:#0f0}
-#result{font-size:18px;font-weight:bold}
-.success{color:#0f0}
-.fail{color:#f00}
+#top{text-align:center;padding:10px}
+#map{height:85vh}
 </style>
 </head>
 
 <body>
 
 <div id="top">
-<h3>👀 Viewer</h3>
+<h3>🗺️ VIEWER</h3>
 Pair Code:
-<input id="pair">
-<button onclick="checkPair()">Check</button>
-<div id="result"></div>
-<p id="info">Not paired</p>
+<input id="pair" placeholder="Enter pair code">
+<p id="info">Waiting…</p>
 </div>
 
 <div id="map"></div>
 
-<h3 style="padding-left:6px">💬 Chat</h3>
-<div id="chat"></div>
-<input id="msg" placeholder="Reply">
-<button onclick="sendText()">Send</button>
-
 <script>
 const ws=new WebSocket("wss://ws-relay-zqzk.onrender.com");
-let paired=false;
 
-let map=L.map("map").setView([11,78],5);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+let map=L.map("map").setView([20,78],5);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+  maxZoom:19
+}).addTo(map);
+
 let marker=null;
-
-function log(cls,text){
-  chat.innerHTML+=`<div class="${cls}">${text}</div>`;
-  chat.scrollTop=chat.scrollHeight;
-}
-
-function checkPair(){
-  ws.send({toString(){return JSON.stringify({type:"pair_check",pair:pair.value.trim().toUpperCase()})}});
-  result.innerText="Checking…";
-}
-
-function sendText(){
-  if(!paired||!msg.value)return;
-  ws.send(JSON.stringify({type:"text",from:"viewer",pair:pair.value,text:msg.value,ts:Date.now()}));
-  log("me","Me: "+msg.value);
-  msg.value="";
-}
 
 ws.onmessage=e=>{
   const d=JSON.parse(e.data);
+  const pair=document.getElementById("pair").value.trim();
+  if(!pair || d.pair!==pair) return;
 
-  if(d.type==="pair_result" && d.pair===pair.value.trim().toUpperCase()){
-    if(d.status==="success"){
-      paired=true;
-      result.innerText="✅ CODE SUCCESS";
-      result.className="success";
-      info.innerText="Connected";
-    }else{
-      paired=false;
-      result.innerText="❌ CODE FAILED";
-      result.className="fail";
-    }
+  if(!marker){
+    marker=L.marker([d.lat,d.lon]).addTo(map);
+  }else{
+    marker.setLatLng([d.lat,d.lon]);
   }
 
-  if(!paired || d.pair!==pair.value.trim()) return;
-
-  if(d.type==="gps"){
-    if(!marker) marker=L.marker([d.lat,d.lon]).addTo(map);
-    else marker.setLatLng([d.lat,d.lon]);
-    map.setView([d.lat,d.lon],16);
-    info.innerText="Last update: "+new Date(d.ts).toLocaleTimeString();
-  }
-
-  if(d.type==="sos"){
-    alert("🚨 SOS RECEIVED!");
-    ws.send(JSON.stringify({type:"ack",pair:pair.value,ts:Date.now()}));
-  }
-
-  if(d.type==="text" && d.from==="sender") log("them","Sender: "+d.text);
-  if(d.type==="audio"){ new Audio(d.audio).play(); }
+  map.setView([d.lat,d.lon],10);
+  document.getElementById("info").innerText=
+    (d.city||"")+" "+(d.region||"")+" | "+
+    new Date(d.ts).toLocaleTimeString();
 };
 </script>
+
 </body>
 </html>
