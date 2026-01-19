@@ -3,81 +3,107 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Location Sender</title>
+<title>Live Location Sender</title>
 
 <style>
 body{
-  background:#111;
-  color:#eee;
-  font-family:Arial;
-  text-align:center;
+  background:#111;color:#eee;
+  font-family:Arial;text-align:center;
   padding:20px;
 }
 input,button{
-  padding:10px;
-  font-size:16px;
-  margin:6px;
+  padding:10px;font-size:16px;margin:6px;
 }
 </style>
 </head>
 
 <body>
 
-<h2>📡 LOCATION SENDER</h2>
+<h2>📍 LIVE LOCATION SENDER</h2>
 
 Pair Code:<br>
-<input id="pair" placeholder="Enter pair code"><br>
+<input id="pair"><br>
 
-<button onclick="sendLocation()">Send Location</button>
+<button onclick="start()">Start Live</button>
+<button onclick="stop()">Stop</button>
 
 <p id="status">Idle</p>
 
 <script>
 const ws = new WebSocket("wss://ws-relay-zqzk.onrender.com");
+let watchId = null;
+let lastSent = null;
 
-// 🔑 restore saved pair code
-const savedPair = localStorage.getItem("pairCode");
-if (savedPair) {
-  document.getElementById("pair").value = savedPair;
-}
+// restore pair
+const saved = localStorage.getItem("pairCode");
+if(saved) pair.value = saved;
 
-async function sendLocation(){
-  const pair = document.getElementById("pair").value.trim();
-  if(!pair){
+function start(){
+  const pairCode = pair.value.trim();
+  if(!pairCode){
     alert("Enter pair code");
     return;
   }
+  localStorage.setItem("pairCode", pairCode);
 
-  // 💾 remember pair code on this device
-  localStorage.setItem("pairCode", pair);
-
-  document.getElementById("status").innerText = "Getting network location…";
-
-  try{
-    const res = await fetch("https://ipapi.co/json/");
-    const loc = await res.json();
-
-    if(!loc.latitude || !loc.longitude){
-      document.getElementById("status").innerText = "Location unavailable";
-      return;
-    }
-
-    ws.send(JSON.stringify({
-      pair: pair,
-      lat: loc.latitude,
-      lon: loc.longitude,
-      acc: 300,
-      city: loc.city || "",
-      region: loc.region || "",
-      ts: Date.now()
-    }));
-
-    document.getElementById("status").innerText =
-      "Sent | " + (loc.city || "") + " " + (loc.region || "");
-
-  }catch(e){
-    document.getElementById("status").innerText = "Network error";
+  if(!navigator.geolocation){
+    alert("Geolocation not supported");
+    return;
   }
+
+  status.innerText = "Live tracking started";
+
+  watchId = navigator.geolocation.watchPosition(
+    pos => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      const acc = Math.round(pos.coords.accuracy);
+
+      // send only if accuracy acceptable
+      if(acc > 500) return;
+
+      // send only if moved > 100m
+      if(lastSent){
+        const d = distance(lastSent.lat,lastSent.lon,lat,lon);
+        if(d < 100) return;
+      }
+
+      lastSent = {lat,lon};
+
+      ws.send(JSON.stringify({
+        pair: pairCode,
+        lat, lon, acc,
+        ts: Date.now()
+      }));
+
+      status.innerText =
+        "Sent | acc ≈ "+acc+" m";
+    },
+    () => {
+      // SILENT: no popup, no alert
+    },
+    {
+      enableHighAccuracy: false, // 🔑 critical
+      maximumAge: 60000,
+      timeout: 20000
+    }
+  );
+}
+
+function stop(){
+  if(watchId) navigator.geolocation.clearWatch(watchId);
+  status.innerText = "Stopped";
+}
+
+function distance(lat1,lon1,lat2,lon2){
+  const R=6371000;
+  const toRad=x=>x*Math.PI/180;
+  const dLat=toRad(lat2-lat1);
+  const dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2 +
+          Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*
+          Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 </script>
 
