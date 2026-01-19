@@ -3,35 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Location Viewer</title>
+<title>Live Location Viewer</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
-body{
-  margin:0;
-  background:#111;
-  color:#eee;
-  font-family:Arial;
-}
-#top{
-  padding:10px;
-  text-align:center;
-}
-#map{
-  height:85vh;
-}
+body{margin:0;background:#111;color:#eee;font-family:Arial}
+#top{text-align:center;padding:10px}
+#map{height:85vh}
 </style>
 </head>
 
 <body>
 
 <div id="top">
-<h3>🗺️ LOCATION VIEWER</h3>
+<h3>🗺️ LIVE VIEWER</h3>
 Pair Code:
-<input id="pair" placeholder="Enter pair code">
-<p id="info">Waiting for location…</p>
+<input id="pair">
+<p id="info">Waiting…</p>
 </div>
 
 <div id="map"></div>
@@ -39,46 +29,40 @@ Pair Code:
 <script>
 const ws = new WebSocket("wss://ws-relay-zqzk.onrender.com");
 
-// 🔑 restore saved pair code
-const savedPair = localStorage.getItem("pairCode");
-if (savedPair) {
-  document.getElementById("pair").value = savedPair;
-}
+// restore pair
+const saved = localStorage.getItem("pairCode");
+if(saved) pair.value = saved;
 
-let map = L.map("map").setView([20,78], 5);
+let map=L.map("map").setView([20,78],5);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
-  maxZoom:19,
-  attribution:"© OpenStreetMap"
+  maxZoom:19
 }).addTo(map);
 
 let marker=null, circle=null;
 
-ws.onmessage = e => {
-  const d = JSON.parse(e.data);
-  const pair = document.getElementById("pair").value.trim();
+ws.onmessage=e=>{
+  const d=JSON.parse(e.data);
+  const p=pair.value.trim();
+  if(!p || d.pair!==p) return;
 
-  if(!pair || d.pair !== pair) return;
-
-  // 💾 remember successful pair code
-  localStorage.setItem("pairCode", pair);
+  localStorage.setItem("pairCode", p);
 
   if(!marker){
-    marker = L.marker([d.lat, d.lon]).addTo(map);
-    circle = L.circle([d.lat, d.lon],{
-      radius: d.acc,
-      color: "red",
-      fillOpacity: 0.2
+    marker=L.marker([d.lat,d.lon]).addTo(map);
+    circle=L.circle([d.lat,d.lon],{
+      radius:d.acc,color:"red",fillOpacity:0.2
     }).addTo(map);
   }else{
-    marker.setLatLng([d.lat, d.lon]);
-    circle.setLatLng([d.lat, d.lon]);
+    marker.setLatLng([d.lat,d.lon]);
+    circle.setLatLng([d.lat,d.lon]);
+    circle.setRadius(d.acc);
   }
 
-  map.setView([d.lat, d.lon], 13);
+  map.setView([d.lat,d.lon], d.acc<200?16:13);
 
-  document.getElementById("info").innerText =
-    (d.city || "") + " " + (d.region || "") +
-    " | " + new Date(d.ts).toLocaleTimeString();
+  info.innerText =
+    "Accuracy ≈ "+d.acc+" m | "+
+    new Date(d.ts).toLocaleTimeString();
 };
 </script>
 
