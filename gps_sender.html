@@ -7,38 +7,31 @@
 
 <style>
 body{
-  background:#111;
-  color:#eee;
-  font-family:Arial;
-  text-align:center;
+  background:#111;color:#eee;
+  font-family:Arial;text-align:center;
   padding:20px;
 }
 input,button{
-  padding:10px;
-  font-size:16px;
-  margin:6px;
+  padding:10px;font-size:16px;margin:6px;
 }
 </style>
 </head>
 
 <body>
 
-<h2>📍 LOCATION SENDER (Hybrid)</h2>
+<h2>📍 LOCATION SENDER</h2>
 
 Pair Code:<br>
 <input id="pair" placeholder="Enter pair code"><br>
 
-<button onclick="start()">Start Sharing</button>
+<button onclick="sendLocation()">Send Location</button>
 
 <p id="status">Idle</p>
 
 <script>
 const ws = new WebSocket("wss://ws-relay-zqzk.onrender.com");
-let watchId = null;
 
-ws.onopen = () => console.log("WS connected");
-
-function start(){
+function sendLocation(){
   const pair = document.getElementById("pair").value.trim();
   if(!pair){
     alert("Enter pair code");
@@ -46,37 +39,55 @@ function start(){
   }
 
   if(!navigator.geolocation){
-    alert("Geolocation not supported");
+    alert("Location not supported");
     return;
   }
 
   document.getElementById("status").innerText = "Getting location…";
 
-  watchId = navigator.geolocation.watchPosition(
+  navigator.geolocation.getCurrentPosition(
     pos => {
-      const data = {
-        pair: pair,
-        lat: pos.coords.latitude,
-        lon: pos.coords.longitude,
-        acc: Math.round(pos.coords.accuracy),
-        ts: Date.now()
-      };
-
-      if(ws.readyState === WebSocket.OPEN){
-        ws.send(JSON.stringify(data));
-        document.getElementById("status").innerText =
-          "Sent | Accuracy ≈ " + data.acc + " m";
-      }
+      send(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pair);
     },
     err => {
-      alert("Location error: " + err.message);
+      // 🔁 SILENT FALLBACK (NO ERROR SHOWN)
+      fallbackNetwork(pair);
     },
     {
-      enableHighAccuracy: false, // 🔑 HYBRID MODE
-      maximumAge: 30000,         // reuse cached location (30s)
-      timeout: 10000
+      enableHighAccuracy: false,   // 🔑 DO NOT FORCE GPS
+      timeout: 30000,              // long wait
+      maximumAge: 60000            // reuse cached
     }
   );
+}
+
+function fallbackNetwork(pair){
+  fetch("https://ipapi.co/json/")
+    .then(r=>r.json())
+    .then(loc=>{
+      send(loc.latitude, loc.longitude, 1000, pair);
+    })
+    .catch(()=>{
+      document.getElementById("status").innerText = "Location unavailable";
+    });
+}
+
+function send(lat, lon, acc, pair){
+  if(ws.readyState!==WebSocket.OPEN){
+    document.getElementById("status").innerText="WS not ready";
+    return;
+  }
+
+  ws.send(JSON.stringify({
+    pair: pair,
+    lat: lat,
+    lon: lon,
+    acc: Math.round(acc),
+    ts: Date.now()
+  }));
+
+  document.getElementById("status").innerText =
+    "Sent | Accuracy ≈ " + Math.round(acc) + " m";
 }
 </script>
 
