@@ -6,16 +6,20 @@
 <title>GPS Sender</title>
 
 <style>
-body{background:#111;color:#eee;font-family:Arial;padding:10px}
-h2{text-align:center}
+body{background:#111;color:#eee;font-family:Arial;text-align:center;padding:10px}
+input,button{padding:8px;margin:5px;font-size:15px}
 #pair{font-weight:bold;letter-spacing:2px}
-#chat{height:160px;overflow-y:auto;border:1px solid #333;padding:5px}
-.msg{margin:4px 0}
+#chat{height:140px;overflow:auto;border:1px solid #333;padding:5px}
 .me{color:#0f0}
 .them{color:#6cf}
-input,button{padding:8px;margin:4px;font-size:15px}
-#sos{position:fixed;bottom:15px;left:50%;transform:translateX(-50%);
-background:red;color:#fff;font-size:20px;border-radius:40px;padding:12px 30px;border:none}
+#sos{
+  position:fixed;bottom:18px;left:50%;
+  transform:translateX(-50%);
+  background:red;color:white;
+  font-size:20px;font-weight:bold;
+  border:none;border-radius:40px;
+  padding:14px 32px;
+}
 </style>
 </head>
 
@@ -23,11 +27,12 @@ background:red;color:#fff;font-size:20px;border-radius:40px;padding:12px 30px;bo
 
 <h2>📍 GPS Sender</h2>
 
-Pair Code: <input id="pair" readonly><br>
+Pair Code:
+<input id="pair" readonly><br>
 
 <button onclick="startGPS()">Start GPS</button>
 <button onclick="stopGPS()">Stop GPS</button>
-<button onclick="recordVoice()">🎙️ Send Voice (10s)</button>
+<button onclick="recordVoice()">🎙️ Voice (10s)</button>
 
 <p id="status">Idle</p>
 
@@ -39,22 +44,21 @@ Pair Code: <input id="pair" readonly><br>
 <button id="sos" onclick="sendSOS()">🚨 SOS</button>
 
 <script>
-const ws = new WebSocket("wss://ws-relay-zqzk.onrender.com");
-let watchId=null;
-let mediaRecorder,chunks=[];
+const ws=new WebSocket("wss://ws-relay-zqzk.onrender.com");
+let watchId=null,mediaRecorder,chunks=[];
 
-// Pair code
+// generate secure pair
 const pairCode=Math.random().toString(36).substring(2,8).toUpperCase();
 pair.value=pairCode;
 
-ws.onopen=()=>log("System","Connected");
-
-function send(data){ws.send(JSON.stringify(data));}
-
-function log(from,text){
-  chat.innerHTML+=`<div class="msg ${from==='Me'?'me':'them'}"><b>${from}:</b> ${text}</div>`;
+function log(cls,text){
+  chat.innerHTML+=`<div class="${cls}">${text}</div>`;
   chat.scrollTop=chat.scrollHeight;
 }
+
+ws.onopen=()=>log("them","System connected");
+
+function send(o){ws.send(JSON.stringify(o));}
 
 // GPS
 function startGPS(){
@@ -72,39 +76,40 @@ function stopGPS(){
 function sendText(){
   if(!msg.value)return;
   send({type:"text",from:"sender",pair:pairCode,text:msg.value,ts:Date.now()});
-  log("Me",msg.value);
+  log("me","Me: "+msg.value);
   msg.value="";
 }
 
 // SOS
 function sendSOS(){
   send({type:"sos",pair:pairCode,ts:Date.now()});
-  alert("🚨 SOS Sent");
+  alert("🚨 SOS sent");
 }
 
-// Voice (10 sec)
+// Voice
 async function recordVoice(){
   const stream=await navigator.mediaDevices.getUserMedia({audio:true});
   mediaRecorder=new MediaRecorder(stream);
   chunks=[];
   mediaRecorder.ondataavailable=e=>chunks.push(e.data);
   mediaRecorder.onstop=()=>{
-    const blob=new Blob(chunks,{type:"audio/webm"});
+    const b=new Blob(chunks,{type:"audio/webm"});
     const r=new FileReader();
     r.onloadend=()=>send({type:"audio",pair:pairCode,audio:r.result,ts:Date.now()});
-    r.readAsDataURL(blob);
+    r.readAsDataURL(b);
   };
   mediaRecorder.start();
   setTimeout(()=>mediaRecorder.stop(),10000);
 }
 
-// Receive
+// RECEIVE
 ws.onmessage=e=>{
   const d=JSON.parse(e.data);
-  if(d.pair!==pairCode)return;
-
-  if(d.type==="ack") log("Viewer","SOS acknowledged");
-  if(d.type==="text" && d.from==="viewer") log("Viewer",d.text);
+  if(d.type==="pair_check"){
+    send({type:"pair_result",pair:d.pair,status:(d.pair===pairCode?"success":"failed")});
+  }
+  if(d.type==="text" && d.from==="viewer") log("them","Viewer: "+d.text);
+  if(d.type==="ack") log("them","SOS acknowledged");
 };
 </script>
 </body>
