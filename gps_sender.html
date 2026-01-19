@@ -3,32 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GPS Sender</title>
+<title>Hybrid Location Sender</title>
 
 <style>
-body {
+body{
   background:#111;
   color:#eee;
   font-family:Arial;
   text-align:center;
   padding:20px;
 }
-input,button {
+input,button{
   padding:10px;
   font-size:16px;
-  margin:8px;
+  margin:6px;
 }
 </style>
 </head>
 
 <body>
 
-<h2>📍 GPS SENDER</h2>
+<h2>📍 LOCATION SENDER (Hybrid)</h2>
 
 Pair Code:<br>
 <input id="pair" placeholder="Enter pair code"><br>
 
-<button onclick="start()">Start GPS</button>
+<button onclick="start()">Start Sharing</button>
 
 <p id="status">Idle</p>
 
@@ -38,19 +38,19 @@ let watchId = null;
 
 ws.onopen = () => console.log("WS connected");
 
-function start() {
+function start(){
   const pair = document.getElementById("pair").value.trim();
-  if (!pair) {
+  if(!pair){
     alert("Enter pair code");
     return;
   }
 
-  if (!navigator.geolocation) {
-    alert("GPS not supported");
+  if(!navigator.geolocation){
+    alert("Geolocation not supported");
     return;
   }
 
-  document.getElementById("status").innerText = "Getting GPS…";
+  document.getElementById("status").innerText = "Getting location…";
 
   watchId = navigator.geolocation.watchPosition(
     pos => {
@@ -58,23 +58,23 @@ function start() {
         pair: pair,
         lat: pos.coords.latitude,
         lon: pos.coords.longitude,
-        acc: pos.coords.accuracy,
+        acc: Math.round(pos.coords.accuracy),
         ts: Date.now()
       };
 
-      if (ws.readyState === WebSocket.OPEN) {
+      if(ws.readyState === WebSocket.OPEN){
         ws.send(JSON.stringify(data));
         document.getElementById("status").innerText =
-          "GPS sent (accuracy " + Math.round(pos.coords.accuracy) + " m)";
+          "Sent | Accuracy ≈ " + data.acc + " m";
       }
     },
     err => {
-      alert("GPS ERROR: " + err.message);
+      alert("Location error: " + err.message);
     },
     {
-      enableHighAccuracy: true,   // 🔴 CRITICAL
-      maximumAge: 0,
-      timeout: 15000
+      enableHighAccuracy: false, // 🔑 HYBRID MODE
+      maximumAge: 30000,         // reuse cached location (30s)
+      timeout: 10000
     }
   );
 }
