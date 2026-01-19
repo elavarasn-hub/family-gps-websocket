@@ -3,26 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hybrid Location Sender</title>
+<title>Location Sender (Network Only)</title>
 
 <style>
 body{
-  background:#111;color:#eee;
-  font-family:Arial;text-align:center;
+  background:#111;
+  color:#eee;
+  font-family:Arial;
+  text-align:center;
   padding:20px;
 }
 input,button{
-  padding:10px;font-size:16px;margin:6px;
+  padding:10px;
+  font-size:16px;
+  margin:6px;
 }
 </style>
 </head>
 
 <body>
 
-<h2>📍 LOCATION SENDER</h2>
+<h2>📡 LOCATION SENDER</h2>
 
 Pair Code:<br>
-<input id="pair" placeholder="Enter pair code"><br>
+<input id="pair" placeholder="Enter same code as viewer"><br>
 
 <button onclick="sendLocation()">Send Location</button>
 
@@ -31,63 +35,40 @@ Pair Code:<br>
 <script>
 const ws = new WebSocket("wss://ws-relay-zqzk.onrender.com");
 
-function sendLocation(){
+async function sendLocation(){
   const pair = document.getElementById("pair").value.trim();
   if(!pair){
     alert("Enter pair code");
     return;
   }
 
-  if(!navigator.geolocation){
-    alert("Location not supported");
-    return;
-  }
+  document.getElementById("status").innerText = "Getting network location…";
 
-  document.getElementById("status").innerText = "Getting location…";
+  try{
+    const res = await fetch("https://ipapi.co/json/");
+    const loc = await res.json();
 
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      send(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pair);
-    },
-    err => {
-      // 🔁 SILENT FALLBACK (NO ERROR SHOWN)
-      fallbackNetwork(pair);
-    },
-    {
-      enableHighAccuracy: false,   // 🔑 DO NOT FORCE GPS
-      timeout: 30000,              // long wait
-      maximumAge: 60000            // reuse cached
-    }
-  );
-}
-
-function fallbackNetwork(pair){
-  fetch("https://ipapi.co/json/")
-    .then(r=>r.json())
-    .then(loc=>{
-      send(loc.latitude, loc.longitude, 1000, pair);
-    })
-    .catch(()=>{
+    if(!loc.latitude || !loc.longitude){
       document.getElementById("status").innerText = "Location unavailable";
-    });
-}
+      return;
+    }
 
-function send(lat, lon, acc, pair){
-  if(ws.readyState!==WebSocket.OPEN){
-    document.getElementById("status").innerText="WS not ready";
-    return;
+    ws.send(JSON.stringify({
+      pair: pair,
+      lat: loc.latitude,
+      lon: loc.longitude,
+      acc: 300,  // estimated accuracy
+      city: loc.city || "",
+      region: loc.region || "",
+      ts: Date.now()
+    }));
+
+    document.getElementById("status").innerText =
+      "Sent | " + (loc.city || "") + " " + (loc.region || "");
+
+  }catch(e){
+    document.getElementById("status").innerText = "Network error";
   }
-
-  ws.send(JSON.stringify({
-    pair: pair,
-    lat: lat,
-    lon: lon,
-    acc: Math.round(acc),
-    ts: Date.now()
-  }));
-
-  document.getElementById("status").innerText =
-    "Sent | Accuracy ≈ " + Math.round(acc) + " m";
 }
 </script>
 
