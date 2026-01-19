@@ -30,7 +30,7 @@ body{
 <div id="top">
 <h3>🗺️ LOCATION VIEWER</h3>
 Pair Code:
-<input id="pair" placeholder="Enter pair code">
+<input id="pair" placeholder="Enter same code as sender">
 <p id="info">Waiting for location…</p>
 </div>
 
@@ -45,36 +45,30 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
   attribution:"© OpenStreetMap"
 }).addTo(map);
 
-let marker = null;
-let circle = null;
+let marker=null, circle=null;
 
 ws.onmessage = e => {
   const d = JSON.parse(e.data);
   const pair = document.getElementById("pair").value.trim();
   if(!pair || d.pair !== pair) return;
 
-  const lat = d.lat;
-  const lon = d.lon;
-  const acc = d.acc;
-
   if(!marker){
-    marker = L.marker([lat, lon]).addTo(map);
-    circle = L.circle([lat, lon], {
-      radius: acc,
+    marker = L.marker([d.lat, d.lon]).addTo(map);
+    circle = L.circle([d.lat, d.lon],{
+      radius: d.acc,
       color: "red",
       fillOpacity: 0.2
     }).addTo(map);
   }else{
-    marker.setLatLng([lat, lon]);
-    circle.setLatLng([lat, lon]);
-    circle.setRadius(acc);
+    marker.setLatLng([d.lat, d.lon]);
+    circle.setLatLng([d.lat, d.lon]);
   }
 
-  map.setView([lat, lon], acc < 300 ? 16 : 13);
+  map.setView([d.lat, d.lon], 13);
 
   document.getElementById("info").innerText =
-    "Accuracy ≈ " + acc + " m | " +
-    new Date(d.ts).toLocaleTimeString();
+    (d.city || "") + " " + (d.region || "") +
+    " | " + new Date(d.ts).toLocaleTimeString();
 };
 </script>
 
