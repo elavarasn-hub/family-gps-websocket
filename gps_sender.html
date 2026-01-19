@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Location Sender (Network Only)</title>
+<title>Location Sender</title>
 
 <style>
 body{
@@ -26,7 +26,7 @@ input,button{
 <h2>📡 LOCATION SENDER</h2>
 
 Pair Code:<br>
-<input id="pair" placeholder="Enter same code as viewer"><br>
+<input id="pair" placeholder="Enter pair code"><br>
 
 <button onclick="sendLocation()">Send Location</button>
 
@@ -35,12 +35,21 @@ Pair Code:<br>
 <script>
 const ws = new WebSocket("wss://ws-relay-zqzk.onrender.com");
 
+// 🔑 restore saved pair code
+const savedPair = localStorage.getItem("pairCode");
+if (savedPair) {
+  document.getElementById("pair").value = savedPair;
+}
+
 async function sendLocation(){
   const pair = document.getElementById("pair").value.trim();
   if(!pair){
     alert("Enter pair code");
     return;
   }
+
+  // 💾 remember pair code on this device
+  localStorage.setItem("pairCode", pair);
 
   document.getElementById("status").innerText = "Getting network location…";
 
@@ -57,7 +66,7 @@ async function sendLocation(){
       pair: pair,
       lat: loc.latitude,
       lon: loc.longitude,
-      acc: 300,  // estimated accuracy
+      acc: 300,
       city: loc.city || "",
       region: loc.region || "",
       ts: Date.now()
