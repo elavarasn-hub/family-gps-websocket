@@ -30,7 +30,7 @@ body{
 <div id="top">
 <h3>🗺️ LOCATION VIEWER</h3>
 Pair Code:
-<input id="pair" placeholder="Enter same code as sender">
+<input id="pair" placeholder="Enter pair code">
 <p id="info">Waiting for location…</p>
 </div>
 
@@ -38,6 +38,12 @@ Pair Code:
 
 <script>
 const ws = new WebSocket("wss://ws-relay-zqzk.onrender.com");
+
+// 🔑 restore saved pair code
+const savedPair = localStorage.getItem("pairCode");
+if (savedPair) {
+  document.getElementById("pair").value = savedPair;
+}
 
 let map = L.map("map").setView([20,78], 5);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
@@ -50,7 +56,11 @@ let marker=null, circle=null;
 ws.onmessage = e => {
   const d = JSON.parse(e.data);
   const pair = document.getElementById("pair").value.trim();
+
   if(!pair || d.pair !== pair) return;
+
+  // 💾 remember successful pair code
+  localStorage.setItem("pairCode", pair);
 
   if(!marker){
     marker = L.marker([d.lat, d.lon]).addTo(map);
